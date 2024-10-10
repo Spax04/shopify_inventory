@@ -1,6 +1,5 @@
 // custom env variables setup
 const customEnv = require("custom-env");
-customEnv.env(process.env.NODE_ENV, "env");
 const i18n = require("i18n");
 i18n.configure({
   locales: ["en", "es"],
