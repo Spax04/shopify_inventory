@@ -2,26 +2,21 @@ import * as bodyParser from "koa-bodyparser";
 import * as axios from "axios";
 
 export const InventoryItemController = (router: any) => {
-  router.post("/products-items-list/", bodyParser(), getAllProducts);
+  router.post("/product-item-list/", bodyParser(), getAllProducts);
   router.post("/inventory-item-list/", bodyParser(), getAllInventoryItems);
-  router.post(
-    "/items-quantity-pre-location/",
-    bodyParser(),
-    getAllInventoryItemsQuantities
-  );
+  router.post("/items-quantity-pre-location/", bodyParser(), getAllInventoryItemsQuantities);
   router.post("/add-new-product/", bodyParser(), addNewProduct);
-  router.post(
-    "/adjust-inventory-quantities",
-    bodyParser(),
-    adjustInventoryQuantities
-  );
+  router.post("/adjust-inventory-quantities/", bodyParser(), adjustInventoryQuantity);
+  router.post("/adjust-inventory-quantities/", bodyParser(), adjustInventoryQuantity);
+  router.post("/delete-product/", bodyParser(), deleteProduct)
+  router.post("/change-location/", bodyParser(), moveInventoryQuantities)
 };
 
 //* GET - inventory item by id
 //! In graphql cnnot gat at all, only specific number of items
 export async function getAllProducts(ctx: any): Promise<any> {
   const { shopName, accessToken } = ctx.request.body;
-  const requestUrl = `https://${shopName}/admin/api/2023-01/graphql.json`;
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Updated to the latest version
 
   const headers = {
     "Content-Type": "application/json",
@@ -39,6 +34,17 @@ export async function getAllProducts(ctx: any): Promise<any> {
                 id
                 title
                 handle
+                variants(first: 10) {
+                  edges {
+                    node {
+                      id
+                      title
+                      inventoryItem {
+                        id
+                      }
+                    }
+                  }
+                }
               }
               cursor
             }
@@ -61,8 +67,6 @@ export async function getAllProducts(ctx: any): Promise<any> {
     };
   }
 }
-
-
 //! GET - inventory item level
 export async function getAllInventoryItems(ctx: any): Promise<any> {
   const { shopName, accessToken } = ctx.request.body; // Include quantity if needed
@@ -88,7 +92,6 @@ export async function getAllInventoryItems(ctx: any): Promise<any> {
             }
           }
         }`,
-        
       },
       { headers }
     );
@@ -103,7 +106,6 @@ export async function getAllInventoryItems(ctx: any): Promise<any> {
     };
   }
 }
-
 
 export async function getAllInventoryItemsQuantities(ctx: any): Promise<any> {
   const { shopName, accessToken } = ctx.request.body; // Only shop name and access token needed
@@ -204,8 +206,6 @@ export async function getAllInventoryItemsQuantities(ctx: any): Promise<any> {
 //     combinedListingRole: "MAIN",
 //   };
 
-
-
 export async function addNewProduct(ctx: any): Promise<any> {
   const { shopName, accessToken, productInput } = ctx.request.body;
   const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
@@ -216,7 +216,7 @@ export async function addNewProduct(ctx: any): Promise<any> {
   };
 
   try {
-    const result  : any = await axios.post(
+    const result: any = await axios.post(
       requestUrl,
       {
         query: `mutation CreateProductWithOptions($input: ProductInput!) {
@@ -291,9 +291,21 @@ export async function addNewProduct(ctx: any): Promise<any> {
 
 
 
+//* input example
+// {
+//   "reason": "correction",
+//   "name": "available",
+//   "changes": [
+//     {
+//       "delta": -4,
+//       "inventoryItemId": "gid://shopify/InventoryItem/8076890636488",
+//       "locationId": "gid://shopify/Location/73171501256"
+//     }
+//   ]
+// }
 
 export async function adjustInventoryQuantity(ctx: any): Promise<any> {
-  const { shopName, accessToken, inventoryInput } = ctx.request.body; // Get shopName, accessToken, and inventoryInput
+  const { shopName, accessToken, inventoryInput } = ctx.request.body;
   const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
 
   const headers = {
@@ -302,7 +314,7 @@ export async function adjustInventoryQuantity(ctx: any): Promise<any> {
   };
 
   try {
-    const result = await axios.post(
+    const result: any = await axios.post(
       requestUrl,
       {
         query: `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
@@ -323,13 +335,14 @@ export async function adjustInventoryQuantity(ctx: any): Promise<any> {
           }
         }`,
         variables: {
-          input: inventoryInput, // Use the inventory input defined above
+          input: inventoryInput,
         },
       },
       { headers }
     );
 
-    console.log(result.data); // Log the full response for debugging
+    console.log("Response from GraphQL:", result.data); // Log the full response
+
     const { inventoryAdjustQuantities } = result.data.data;
 
     if (inventoryAdjustQuantities) {
@@ -344,7 +357,7 @@ export async function adjustInventoryQuantity(ctx: any): Promise<any> {
       ctx.body = { error: "No inventoryAdjustQuantities response received." };
     }
   } catch (error) {
-    console.error("Error adjusting inventory quantity:", error);
+    console.error("Error adjusting inventory:", error);
 
     if (error.response) {
       console.error("Error response:", error.response.data);
@@ -353,9 +366,163 @@ export async function adjustInventoryQuantity(ctx: any): Promise<any> {
     } else {
       ctx.status = 500;
       ctx.body = {
-        error:
-          "An unexpected error occurred while adjusting the inventory quantity.",
+        error: "An unexpected error occurred while adjusting the inventory.",
       };
     }
   }
 }
+
+export async function deleteProduct(ctx: any): Promise<any> {
+  const { shopName, accessToken, productId } = ctx.request.body;
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Use the latest API version
+
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": accessToken,
+  };
+
+  try {
+    const result: any = await axios.post(
+      requestUrl,
+      {
+        query: `mutation {
+          productDelete(input: {id: "${productId}"}) {
+            deletedProductId
+            userErrors {
+              field
+              message
+            }
+          }
+        }`,
+      },
+      { headers }
+    );
+
+   console.log("Response from GraphQL:", result.data);  // Log the full response
+
+    // Check if data and productDelete exist in the response
+    if (result.data && result.data.data && result.data.data.productDelete) {
+      const { productDelete } = result.data.data;
+
+      // Handle potential user errors
+      if (productDelete.userErrors.length > 0) {
+        ctx.status = 400; // Bad request
+        ctx.body = { errors: productDelete.userErrors };
+      } else {
+        // If successful, return the deleted product ID
+        ctx.body = { deletedProductId: productDelete.deletedProductId };
+      }
+    } else {
+      // Handle missing or invalid response structure
+      ctx.status = 400;
+      ctx.body = { error: "No valid productDelete response received from Shopify." };
+    }
+  } catch (error) {
+    console.error("Error deleting product:", error);
+
+    if (error.response) {
+      console.error("Error response from Shopify:", error.response.data);
+      ctx.status = error.response.status || 500;
+      ctx.body = error.response.data || {
+        error: "An error occurred while communicating with Shopify.",
+      };
+    } else {
+      ctx.status = 500;
+      ctx.body = {
+        error: "An unexpected error occurred while deleting the product.",
+      };
+    }
+  }
+}
+
+export async function moveInventoryQuantities(ctx: any): Promise<any> {
+  const { shopName, accessToken, inventoryItemId, fromLocationId, toLocationId, quantity } = ctx.request.body;
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Use the latest API version
+
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": accessToken,
+  };
+
+  try {
+    // Prepare the inventory adjustment input
+    const inventoryInput = {
+      reason: "movement_updated",
+      name:"available", 
+      changes: [
+        {
+          delta: -quantity, // Decrease quantity at the origin
+          inventoryItemId:inventoryItemId,
+          locationId: fromLocationId
+        },
+        {
+          delta: quantity, // Increase quantity at the target
+          inventoryItemId: inventoryItemId,
+          locationId: toLocationId
+        },
+      ],
+    };
+
+    const result: any = await axios.post(
+      requestUrl,
+      {
+        query: `mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
+          inventoryAdjustQuantities(input: $input) {
+            userErrors {
+              field
+              message
+            }
+            inventoryAdjustmentGroup {
+              createdAt
+              reason
+              referenceDocumentUri
+              changes {
+                name
+                delta
+              }
+            }
+          }
+        }`,
+        variables: {
+          input: inventoryInput,
+        },
+      },
+      { headers }
+    );
+
+    console.log("Response from GraphQL:", result.data); // Log the full response
+
+    const { inventoryAdjustQuantities } = result.data.data;
+
+    if (inventoryAdjustQuantities) {
+      if (inventoryAdjustQuantities.userErrors.length > 0) {
+        ctx.status = 400; // Bad request
+        ctx.body = { errors: inventoryAdjustQuantities.userErrors };
+      } else {
+        ctx.body = inventoryAdjustQuantities.inventoryAdjustmentGroup; // Return the inventory adjustment details
+      }
+    } else {
+      ctx.status = 400;
+      ctx.body = { error: "No inventoryAdjustQuantities response received." };
+    }
+  } catch (error) {
+    console.error("Error adjusting inventory:", error);
+
+    if (error.response) {
+      console.error("Error response:", error.response.data);
+      ctx.status = error.response.status;
+      ctx.body = error.response.data;
+    } else {
+      ctx.status = 500;
+      ctx.body = {
+        error: "An unexpected error occurred while adjusting the inventory.",
+      };
+    }
+  }
+}
+
+
+  
+
+
+
