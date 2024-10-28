@@ -1,31 +1,24 @@
 // src/indexedDB.js
 import { openDB } from 'idb';
 
-let dbVersion = 1;
+
 // Initialize the IndexedDB
 export const initDB = async (storeName) => {
     const dbName = 'locations';
 
-    // Open the database
-    const db = await openDB(dbName, dbVersion);
+    const db = await openDB(dbName);
 
-    // Check if the store exists
     if (!db.objectStoreNames.contains(storeName)) {
         console.log(`Object store ${storeName} not found, upgrading database to create it.`);
 
-        // Close the current database connection
         db.close();
 
-        // Upgrade the version to create the new object store
-        dbVersion++;
-
-        // Open the database with the new version and create the store in the upgrade callback
-        const upgradedDB = await openDB(dbName, dbVersion, {
+        const upgradedDB = await openDB(dbName, db.version + 1, {
             upgrade(upgradeDB) {
                 if (!upgradeDB.objectStoreNames.contains(storeName)) {
                     upgradeDB.createObjectStore(storeName, {
                         keyPath: 'id',
-                        autoIncrement: true, // Using autoIncrement for simplicity, adjust as needed
+                        autoIncrement: true,
                     });
                 }
             }

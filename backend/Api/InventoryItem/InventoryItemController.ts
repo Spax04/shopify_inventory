@@ -113,87 +113,6 @@ export async function getAllInventoryItems(ctx: any): Promise<any> {
   }
 }
 
-// export async function getAllInventoryItemsQuantitiesPreLocation(ctx: any): Promise<any> {
-//   const { shopName, accessToken } = ctx.request.body; // Only shop name and access token needed
-//   const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
-
-//   const headers = {
-//     "Content-Type": "application/json",
-//     "X-Shopify-Access-Token": accessToken,
-//   };
-
-//   try {
-//     const response: any = await axios.post(
-//       requestUrl,
-//       {
-//         query: `query {
-//           inventoryItems(first: 100) {
-//             edges {
-//               node {
-//                 id
-//                 sku
-//                 inventoryLevels(first: 10) {
-//                   edges {
-//                     node {
-//                       id
-//                       location {
-//                         id
-//                         name
-//                       }
-//                       quantities(names: ["available", "incoming", "committed", "damaged", "on_hand", "quality_control", "reserved", "safety_stock"]) {
-//                         name
-//                         quantity
-//                       }
-//                     }
-//                   }
-//                 }
-//                 variant {
-//                   id
-//                   sku
-//                   selectedOptions {
-//                     name
-//                     value
-//                   }
-//                   product {
-//                     title
-//                     images(first: 1) {
-//                       edges {
-//                         node {
-//                           originalSrc
-//                           altText
-//                         }
-//                       }
-//                     }
-//                   }
-//                 }
-//               }
-//             }
-//           }
-//         }`,
-//       },
-//       { headers }
-//     );
-
-//     console.log(response.data);
-//     const orgnizedList = await new InventoryItemService().organizeInventoryByLocation(response.data.data.inventoryItems.edges)
-
-//     console.log(response.data);
-
-//     ctx.body = { origin: response.data.data, orgonized: orgnizedList }
-//     //ctx.body = orgnizedList
-//   } catch (error) {
-//     console.error("Error fetching inventory items quantities:", error);
-//     ctx.status = error.response?.status || 500;
-//     ctx.body = error.response?.data || {
-//       error: "An error occurred while fetching inventory item quantities.",
-//     };
-//   }
-// }
-
-
-
-
-
 //* example of input product
 // {
 //     title: "Eco-Friendly Yoga Mat",
@@ -661,6 +580,7 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
                     value
                   }
                   product {
+                    id  
                     title
                     images(first: 1) {
                       edges {
@@ -688,6 +608,7 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
     // Execute the GraphQL query using axios
     const response = await axios.post(requestUrl, { query }, { headers });
 
+    console.log(response.data);
     // Handle response status
     if (response.status !== 200) {
       ctx.status = response.status;
@@ -712,7 +633,6 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
     // Send the inventory levels details and pagination info to the client
     ctx.status = 200;
     ctx.body = { organizedData, pageInfo };
-
   } catch (error) {
     console.error("Error fetching inventory levels:", error);
     ctx.status = 500;

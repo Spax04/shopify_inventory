@@ -1,14 +1,15 @@
 interface InventoryItem {
   productName: string;
   productId: string;
-  item: string;
-  sku: string;
   imageURLs: (string | null)[];
   productVariants: {
     variants: {
       name: string;
       value: string;
     }[];
+    inventoryItemId: string
+    productVarianId: string;
+    sku: string;
     quantities: Quantity[];
   }[];
 }
@@ -27,6 +28,7 @@ type InventoryLevel = {
     variant: {
       id: string;
       product: {
+        id: string;
         title: string;
         images: {
           edges: {
@@ -63,39 +65,41 @@ export class InventoryItemService {
       locationId: '',
       inventoryItems: {}
     };
-  
+
     inventoryLevels.forEach((level) => {
       const { item, location } = level;
       const productName = item.variant.product.title;
       const sku = item.variant.sku;
       const inventoryItemId = item.id;  // This will be the key as per the interface
-      const productId = item.variant.id;
-  
+      const productId = item.variant.product.id;
+      const productVarianId = item.variant.id
+
       // Set location metadata
       locationData.locationName = location.name;
       locationData.locationId = location.id;
-  
+
       // If this inventory item is not already in the map, initialize it
-      if (!locationData.inventoryItems[inventoryItemId]) {
-        locationData.inventoryItems[inventoryItemId] = {
+      if (!locationData.inventoryItems[productId]) {
+        locationData.inventoryItems[productId] = {
           productName,
           productId,
-          item: productName,
-          sku,
           imageURLs: item.variant.product.images.edges.map((img) => img.node.originalSrc),
           productVariants: []
         };
       }
-  
+
       // Add selected options (variants) and quantities to the productVariants array
       const selectedOptions = {
         variants: item.variant.selectedOptions,
+        inventoryItemId,
+        productVarianId,
+        sku,
         quantities: level.quantities
       };
-  
-      locationData.inventoryItems[inventoryItemId].productVariants.push(selectedOptions);
+
+      locationData.inventoryItems[productId].productVariants.push(selectedOptions);
     });
-  
+
     return locationData;
   };
 }
