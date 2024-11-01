@@ -11,8 +11,8 @@ function LocationInventory() {
   const [loading, setLoading] = useState(true);
   const [currentInventory, setCurrentInventory] = useState([])// loading state
   const [tabChanged, setTabChanged] = useState(false)
-  const shopName = ''
-  const accessToken = ''
+  const shopName = process.env.REACT_APP_TEST_SHOP
+  const accessToken = process.env.REACT_APP_TEST_TOKEN
   const navigation = useNavigate()
   useEffect(() => {
     // Fetch inventory data from the API
@@ -130,9 +130,11 @@ function LocationInventory() {
     setTabChanged(true)
   }
 
-  const handleRelocateQunatity = (locationId, productVariant) => {
+  const handleRelocateQunatity = (locationId, variant,productName) => {
 
-    navigation("/change-location-quantity")
+    console.log(locationId);
+    console.log(variant);
+    navigation("/change-location-quantity", { state: { locationId, variant,productName } })
   }
 
 
@@ -194,7 +196,7 @@ function LocationInventory() {
                                       </div>
                                     ))}
                                   </div>
-                                  <Button onClick={() => handleRelocateQunatity(location.id, variant)}>Move to other location</Button>
+                                  <Button onClick={() => handleRelocateQunatity(location.id, variant,product.productName)}>Move to other location</Button>
                                   <hr />
 
                                 </div>

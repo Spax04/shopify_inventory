@@ -395,7 +395,7 @@ export async function deleteProduct(ctx: any): Promise<any> {
 
 export async function moveInventoryQuantities(ctx: any): Promise<any> {
   const { shopName, accessToken, inventoryItemId, fromLocationId, toLocationId, quantity } = ctx.request.body;
-  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Use the latest API version
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
 
   const headers = {
     "Content-Type": "application/json",
@@ -403,18 +403,18 @@ export async function moveInventoryQuantities(ctx: any): Promise<any> {
   };
 
   try {
-    // Prepare the inventory adjustment input
+    
     const inventoryInput = {
       reason: "movement_updated",
       name: "available",
       changes: [
         {
-          delta: -quantity, // Decrease quantity at the origin
+          delta: -quantity, 
           inventoryItemId: inventoryItemId,
           locationId: fromLocationId
         },
         {
-          delta: quantity, // Increase quantity at the target
+          delta: quantity, 
           inventoryItemId: inventoryItemId,
           locationId: toLocationId
         },
@@ -448,16 +448,16 @@ export async function moveInventoryQuantities(ctx: any): Promise<any> {
       { headers }
     );
 
-    console.log("Response from GraphQL:", result.data); // Log the full response
+    console.log("Response from GraphQL:", result.data); 
 
     const { inventoryAdjustQuantities } = result.data.data;
 
     if (inventoryAdjustQuantities) {
       if (inventoryAdjustQuantities.userErrors.length > 0) {
-        ctx.status = 400; // Bad request
+        ctx.status = 400; 
         ctx.body = { errors: inventoryAdjustQuantities.userErrors };
       } else {
-        ctx.body = inventoryAdjustQuantities.inventoryAdjustmentGroup; // Return the inventory adjustment details
+        ctx.body = inventoryAdjustQuantities.inventoryAdjustmentGroup; 
       }
     } else {
       ctx.status = 400;
@@ -486,7 +486,7 @@ export async function moveInventoryQuantities(ctx: any): Promise<any> {
 
 export async function getAllLocations(ctx: any): Promise<any> {
   const { shopName, accessToken } = ctx.request.body;
-  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Shopify GraphQL API endpoint
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; 
 
   const headers = {
     "Content-Type": "application/json",
@@ -521,8 +521,7 @@ export async function getAllLocations(ctx: any): Promise<any> {
     }
 
     const result = await response.json();
-
-    // Check if there are any errors in the GraphQL response
+ 
     if (result.errors) {
       ctx.status = 400;
       ctx.body = { errors: result.errors };
@@ -532,7 +531,7 @@ export async function getAllLocations(ctx: any): Promise<any> {
     const locations = result.data.locations.edges.map((edge: any) => edge.node);
 
     ctx.status = 200;
-    ctx.body = { locations }; // Return the fetched locations
+    ctx.body = { locations }; 
 
   } catch (error) {
     console.error("Error fetching locations:", error);
@@ -544,15 +543,14 @@ export async function getAllLocations(ctx: any): Promise<any> {
 
 
 export async function getAllItemsByLocation(ctx: any): Promise<any> {
-  const { shopName, accessToken, locationId, cursor } = ctx.request.body; // Extract location ID and cursor from request body
-  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Shopify GraphQL API endpoint
+  const { shopName, accessToken, locationId, cursor } = ctx.request.body; 
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; 
 
   const headers = {
     "Content-Type": "application/json",
     "X-Shopify-Access-Token": accessToken,
   };
 
-  // GraphQL query to fetch inventory items by location with cursor-based pagination
   const query = `
     query {
       location(id: "${locationId}") {
@@ -605,11 +603,9 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
   `;
 
   try {
-    // Execute the GraphQL query using axios
     const response = await axios.post(requestUrl, { query }, { headers });
 
     console.log(response.data);
-    // Handle response status
     if (response.status !== 200) {
       ctx.status = response.status;
       ctx.body = { error: "Failed to fetch inventory levels from Shopify." };
@@ -618,19 +614,16 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
 
     const result: any = response.data;
 
-    // Check for GraphQL errors
     if (result.errors) {
       ctx.status = 400;
       ctx.body = { errors: result.errors };
       return;
     }
 
-    // Extract the inventory levels details and pagination info
     const inventoryLevels = result.data.location.inventoryLevels.edges.map((edge: { node: any; }) => edge.node);
     const pageInfo = result.data.location.inventoryLevels.pageInfo;
  
     const organizedData = await new InventoryItemService().organizeInventoryFromLocationData(inventoryLevels)
-    // Send the inventory levels details and pagination info to the client
     ctx.status = 200;
     ctx.body = { organizedData, pageInfo };
   } catch (error) {
