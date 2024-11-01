@@ -50,16 +50,26 @@ export const updateData = async (storaName, id, updatedData) => {
 
 export const getPageInfo = async (storaName) => {
     const db = await initDB(storaName);
-    await db.get(storaName, "pageInfo")
+    return await db.get(storaName, "pageInfo")
 };
 
 export const storeInventoryData = async (locationId, data) => {
     const db = await initDB(locationId);  // Use locationId as store name
 
+
     // Store each inventory item with its ID as key
     const inventoryItems = data.organizedData.inventoryItems;
     for (const [inventoryId, inventoryItem] of Object.entries(inventoryItems)) {
-        await db.put(locationId, { id: inventoryId, ...inventoryItem });
+        const existingItem = await db.get(locationId, inventoryItem.productId);
+
+        if (!existingItem) {
+            await db.put(locationId, { id: inventoryId, ...inventoryItem });
+            console.log("New data was stored into index db");
+        } else {
+            const updatedVariants = [...existingItem.productVariants, ...inventoryItem.productVariants];
+            await db.put(locationId, { id: inventoryId, ...existingItem, productVariants: updatedVariants });
+            console.log("Poduct data was updated at indexed db (added variant)");
+        }
     }
 
     // Store pageInfo separately with a key "pageInfo"

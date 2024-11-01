@@ -558,7 +558,7 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
       location(id: "${locationId}") {
         id
         name
-        inventoryLevels(first: 10, after: ${cursor ? `"${cursor}"` : null}) {
+        inventoryLevels(first: 3, after: ${cursor ? `"${cursor}"` : null}) {
           edges {
             node {
               id
