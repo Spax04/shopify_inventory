@@ -11,9 +11,27 @@ function LocationInventory() {
   const [loading, setLoading] = useState(true);
   const [currentInventory, setCurrentInventory] = useState([])// loading state
   const [tabChanged, setTabChanged] = useState(false)
+  const [worker, setWorker] = useState(null);
+  const navigation = useNavigate()
+
   const shopName = process.env.REACT_APP_TEST_SHOP
   const accessToken = process.env.REACT_APP_TEST_TOKEN
-  const navigation = useNavigate()
+
+  useEffect(() => {
+    const myWorker = new Worker(new URL('../utils/inventoryWorker.js', import.meta.url));
+
+    myWorker.onmessage = function (event) {
+      console.log('Received result from worker:', event.data);
+      setCurrentItems(event.data)
+    };
+
+    setWorker(myWorker);
+
+
+    return () => {
+      myWorker.terminate();
+    };
+  }, []);
   useEffect(() => {
     // Fetch inventory data from the API
     const getLocations = async () => {
@@ -36,16 +54,26 @@ function LocationInventory() {
     }
     getLocations()
   }, []);
-  // useEffect(() => {
-  //   if (currentInventory.length > 0) {
-  //     console.log("Updated currentInventory:", currentInventory);
-  //   }
-  // }, [currentInventory]);
 
+
+
+  const setCurrentItems = async (locationId) => {
+    const cachedLocationData = await getAllData(locationId);
+
+    if (cachedLocationData && cachedLocationData.length > 0) {
+      console.log("Using cached inventory data from IndexedDB");
+      const withoutPageInfo = cachedLocationData.filter((u) => u.id !== "pageInfo");
+      setCurrentInventory(withoutPageInfo);
+    }
+  }
 
   const handleLocationInventory = async (locationId) => {
-    setCurrentInventory([]);  // Reset current inventory on each location change
-    setLoading(true);
+    setCurrentInventory([]);
+
+   // worker.terminate()
+
+    console.log("worker has been terminated!");
+
     try {
       const cachedLocationData = await getAllData(locationId);
 
@@ -62,66 +90,27 @@ function LocationInventory() {
           return;
         }
 
-        let hasNextPage = pageInfo.hasNextPage;
-        let cursor = pageInfo.endCursor;
-
-
-        while (hasNextPage) {
-          console.log("Trying to fetch more products from the backend.");
-          const { data: response } = await axios.post(
-            "http://127.0.0.1:5000/get-all-inventory-items-by-location/",
-            {
-              shopName,
-              accessToken,
-              locationId,
-              cursor,
-            }
-          );
-
-          console.log("HAS NEXT PAGE: " + response.pageInfo.hasNextPage);
-
-          await storeInventoryData(locationId, response);
-          hasNextPage = response.pageInfo.hasNextPage;
-          cursor = response.pageInfo.endCursor;
-
-
+        let endCursor = pageInfo.endCursor
+        if (worker) {
+          console.log("Worker starts!");
+          worker.postMessage({ shopName, locationId, accessToken, endCursor });
         }
-        const updatedData = await getAllData(locationId);
-        setCurrentInventory(updatedData);  // Update currentInventory once outside the loop
+
       } else {
-        // No cached data, fetch from API
-        let hasNextPage = true;
-        let cursor = null;
+        let endCursor = null;
 
-
-        while (hasNextPage) {
-          const { data: response } = await axios.post(
-            "http://127.0.0.1:5000/get-all-inventory-items-by-location/",
-            {
-              shopName,
-              accessToken,
-              locationId,
-              cursor,
-            }
-          );
-
-          console.log("HAS NEXT PAGE: " + response.pageInfo.hasNextPage);
-          hasNextPage = response.pageInfo.hasNextPage;
-          cursor = response.pageInfo.endCursor;
-
-          await storeInventoryData(locationId, response);
-
-
+        if (worker) {
+          console.log("Worker starts!");
+          worker.postMessage({ shopName, locationId, accessToken, endCursor });
         }
-        const updatedData = await getAllData(locationId);
-        setCurrentInventory(updatedData);  // Update currentInventory once outside the loop
+
       }
 
-      setLoading(false);
     } catch (error) {
       console.error("Error fetching inventory data:", error);
-      setLoading(false);
     }
+
+    console.log("EXIST FROM FUNCTION!!!!");
   };
 
 
@@ -130,11 +119,11 @@ function LocationInventory() {
     setTabChanged(true)
   }
 
-  const handleRelocateQunatity = (locationId, variant,productName) => {
+  const handleRelocateQunatity = (locationId, variant, productName) => {
 
     console.log(locationId);
     console.log(variant);
-    navigation("/change-location-quantity", { state: { locationId, variant,productName } })
+    navigation("/change-location-quantity", { state: { locationId, variant, productName } })
   }
 
 
@@ -155,63 +144,63 @@ function LocationInventory() {
       >
         {locationData.map((location) => (
           <Tab eventKey={location.id} title={location.name} key={location.id} >
-            {loading ?
-              (<div>Loading...</div>) : (
 
-                <Accordion>
-                  {Array.isArray(currentInventory) && currentInventory.length > 0 ? (
-                    currentInventory.map((product) => (
-                      <Card key={product.productId}>
-                        <Accordion.Item eventKey={product.productId}>
-                          <Accordion.Header>
+
+
+            <Accordion>
+              {Array.isArray(currentInventory) && currentInventory.length > 0 ? (
+                currentInventory.map((product) => (
+                  <Card key={product.productId}>
+                    <Accordion.Item eventKey={product.productId}>
+                      <Accordion.Header>
+                        <h5>{product.productName}</h5>
+                      </Accordion.Header>
+                      <Accordion.Body>
+                        <div className="row mb-3">
+                          <div className="col-md-3">
+                            {product.imageURLs ? (<Image src={product.imageURLs[0]} alt={product.productName} fluid />) : (<></>)}
+
+                          </div>
+                          <div className="col-md-9">
                             <h5>{product.productName}</h5>
-                          </Accordion.Header>
-                          <Accordion.Body>
-                            <div className="row mb-3">
-                              <div className="col-md-3">
-                                {product.imageURLs ? (<Image src={product.imageURLs[0]} alt={product.productName} fluid />) : (<></>)}
+                          </div>
+                        </div>
 
+                        <h6>Variants:</h6>
+                        {Array.isArray(product.productVariants) && product.productVariants.length > 0 ? (
+                          product.productVariants.map((variant, variantIndex) => (
+                            <div key={variantIndex} className="mb-3">
+                              <h6>Variant {variantIndex + 1}</h6>
+                              <div className="row">
+                                {variant.variants.map((option, optionIndex) => (
+                                  <div className="col-md-4" key={optionIndex}>
+                                    <strong>{option.name}:</strong> {option.value}
+                                  </div>
+                                ))}
                               </div>
-                              <div className="col-md-9">
-                                <h5>{product.productName}</h5>
+                              <div className="row mt-2">
+                                {variant.quantities.map((quantity, quantityIndex) => (
+                                  <div className="col-md-3" key={quantityIndex}>
+                                    <strong>{quantity.name}:</strong> {quantity.quantity}
+                                  </div>
+                                ))}
                               </div>
+                              <Button onClick={() => handleRelocateQunatity(location.id, variant, product.productName)}>Move to other location</Button>
+                              <hr />
+
                             </div>
-
-                            <h6>Variants:</h6>
-                            {Array.isArray(product.productVariants) && product.productVariants.length > 0 ? (
-                              product.productVariants.map((variant, variantIndex) => (
-                                <div key={variantIndex} className="mb-3">
-                                  <h6>Variant {variantIndex + 1}</h6>
-                                  <div className="row">
-                                    {variant.variants.map((option, optionIndex) => (
-                                      <div className="col-md-4" key={optionIndex}>
-                                        <strong>{option.name}:</strong> {option.value}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="row mt-2">
-                                    {variant.quantities.map((quantity, quantityIndex) => (
-                                      <div className="col-md-3" key={quantityIndex}>
-                                        <strong>{quantity.name}:</strong> {quantity.quantity}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <Button onClick={() => handleRelocateQunatity(location.id, variant,product.productName)}>Move to other location</Button>
-                                  <hr />
-
-                                </div>
-                              ))
-                            ) : (
-                              <div>No variants available</div>
-                            )}
-                          </Accordion.Body>
-                        </Accordion.Item>
-                      </Card>
-                    ))
-                  ) : (
-                    <div>No inventory available for this location.</div>
-                  )}
-                </Accordion>)}
+                          ))
+                        ) : (
+                          <div>No variants available</div>
+                        )}
+                      </Accordion.Body>
+                    </Accordion.Item>
+                  </Card>
+                ))
+              ) : (
+                <div>No inventory available for this location.</div>
+              )}
+            </Accordion>
           </Tab>
         ))}
       </Tabs>
