@@ -8,34 +8,39 @@ import { useNavigate } from "react-router-dom";
 function LocationInventory() {
   const [key, setKey] = useState(""); // active key for tabs
   const [locationData, setLocationData] = useState([]); // store the inventory data per location
-  const [loading, setLoading] = useState(true);
   const [currentInventory, setCurrentInventory] = useState([])// loading state
-  const [tabChanged, setTabChanged] = useState(false)
-  const [worker, setWorker] = useState(null);
+  const [currentLocation, setCurrentLocation] = useState()
   const navigation = useNavigate()
 
   const shopName = process.env.REACT_APP_TEST_SHOP
   const accessToken = process.env.REACT_APP_TEST_TOKEN
 
   useEffect(() => {
-    const myWorker = new Worker(new URL('../utils/inventoryWorker.js', import.meta.url));
+    console.log(currentLocation);
+    if (currentLocation) {
 
-    myWorker.onmessage = function (event) {
-      console.log('Received result from worker:', event.data);
-      setCurrentItems(event.data)
-    };
+      const myWorker = new Worker(new URL('../utils/inventoryWorker.js', import.meta.url));
 
-    setWorker(myWorker);
+      myWorker.onmessage = function (event) {
+        console.log('Received result from worker:', event.data);
+        setCurrentItems(event.data)
+      };
 
+      handleLocationInventory(currentLocation, myWorker)
 
-    return () => {
-      myWorker.terminate();
-    };
-  }, []);
+      return () => {
+        console.log("worker has been terminated!");
+
+        myWorker.terminate();
+      };
+    }
+  }, [currentLocation]);
   useEffect(() => {
     // Fetch inventory data from the API
     const getLocations = async () => {
 
+      console.log(shopName);
+      console.log(accessToken);
       await axios
         .post("http://127.0.0.1:5000/get-locations/", {
           shopName,
@@ -45,17 +50,13 @@ function LocationInventory() {
           console.log(response);
           console.log(response.locations);
           setLocationData(response.locations);
-          setLoading(false); // Set loading to false
         })
         .catch((error) => {
           console.error("Error fetching inventory data:", error);
-          setLoading(false);
         });
     }
     getLocations()
   }, []);
-
-
 
   const setCurrentItems = async (locationId) => {
     const cachedLocationData = await getAllData(locationId);
@@ -67,12 +68,8 @@ function LocationInventory() {
     }
   }
 
-  const handleLocationInventory = async (locationId) => {
+  const handleLocationInventory = async (locationId, currentWorker) => {
     setCurrentInventory([]);
-
-   // worker.terminate()
-
-    console.log("worker has been terminated!");
 
     try {
       const cachedLocationData = await getAllData(locationId);
@@ -81,7 +78,6 @@ function LocationInventory() {
         console.log("Using cached inventory data from IndexedDB");
         const withoutPageInfo = cachedLocationData.filter((u) => u.id !== "pageInfo");
         setCurrentInventory(withoutPageInfo);
-        setLoading(false);
 
         let pageInfo = await getPageInfo(locationId);
 
@@ -91,17 +87,17 @@ function LocationInventory() {
         }
 
         let endCursor = pageInfo.endCursor
-        if (worker) {
+        if (currentWorker) {
           console.log("Worker starts!");
-          worker.postMessage({ shopName, locationId, accessToken, endCursor });
+          currentWorker.postMessage({ shopName, locationId, accessToken, endCursor });
         }
 
       } else {
         let endCursor = null;
 
-        if (worker) {
+        if (currentWorker) {
           console.log("Worker starts!");
-          worker.postMessage({ shopName, locationId, accessToken, endCursor });
+          currentWorker.postMessage({ shopName, locationId, accessToken, endCursor });
         }
 
       }
@@ -110,14 +106,8 @@ function LocationInventory() {
       console.error("Error fetching inventory data:", error);
     }
 
-    console.log("EXIST FROM FUNCTION!!!!");
+    console.log("EXIT FROM FUNCTION!!!!");
   };
-
-
-
-  const handleTabChanged = () => {
-    setTabChanged(true)
-  }
 
   const handleRelocateQunatity = (locationId, variant, productName) => {
 
@@ -125,8 +115,6 @@ function LocationInventory() {
     console.log(variant);
     navigation("/change-location-quantity", { state: { locationId, variant, productName } })
   }
-
-
 
   return (
     <div className="container mt-4">
@@ -136,9 +124,8 @@ function LocationInventory() {
         id="location-tabs"
         activeKey={key}
         onSelect={(k) => {
-          setKey(k); // Set the active tab key
-          handleLocationInventory(k);
-          handleTabChanged();// Fetch inventory for the selected location
+          setKey(k);
+          setCurrentLocation(k)
         }}
         className="mb-3"
       >

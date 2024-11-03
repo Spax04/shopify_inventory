@@ -102,5 +102,17 @@ export class InventoryItemService {
 
     return locationData;
   };
+
+  countItmesInLocation = (response: any) => {
+
+    console.log(response.location);
+    const inventoryLevels : InventoryLevel[] = response.location.inventoryLevels.edges
+
+    let totalCount = 0;
+
+    inventoryLevels.forEach((node) => totalCount += node.quantities[0].available)
+    
+    return totalCount
+  }
 }
 
