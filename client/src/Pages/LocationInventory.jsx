@@ -6,14 +6,64 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { useNavigate } from "react-router-dom";
 
 function LocationInventory() {
-  const [key, setKey] = useState(""); // active key for tabs
-  const [locationData, setLocationData] = useState([]); // store the inventory data per location
-  const [currentInventory, setCurrentInventory] = useState([])// loading state
+  const [key, setKey] = useState("");
+  const [locationData, setLocationData] = useState([]);
+  const [currentInventory, setCurrentInventory] = useState([])
   const [currentLocation, setCurrentLocation] = useState()
+  const [hasHavyData,setHasHavyData] = useState(true)
   const navigation = useNavigate()
 
   const shopName = process.env.REACT_APP_TEST_SHOP
   const accessToken = process.env.REACT_APP_TEST_TOKEN
+
+  useEffect(() => {
+    const getLocations = async () => {
+
+      console.log(shopName);
+      console.log(accessToken);
+      await axios
+        .post("http://127.0.0.1:5000/get-locations/", {
+          shopName,
+          accessToken
+        })
+        .then(({ data: response }) => {
+          console.log(response);
+          console.log(response.locations);
+          setLocationData(response.locations);
+        })
+        .catch((error) => {
+          console.error("Error fetching inventory data:", error);
+        });
+    }
+    getLocations()
+  }, []);
+
+  useEffect(() => {
+    const isThereALotOfItems = async () => {
+
+      console.log(shopName);
+      console.log(accessToken);
+      await axios
+        .post("http://127.0.0.1:5000/items-count-pre-location/", {
+          shopName,
+          accessToken,
+          locationId: currentLocation
+        })
+        .then(({ data: response }) => {
+          console.log(response);
+          console.log(response.locations);
+          setHasHavyData(response)
+        })
+        .catch((error) => {
+          console.error("Error fetching havy data option:", error);
+        });
+    }
+
+    if (currentLocation)
+      isThereALotOfItems()
+
+  }, []);
+
 
   useEffect(() => {
     console.log(currentLocation);
@@ -35,28 +85,6 @@ function LocationInventory() {
       };
     }
   }, [currentLocation]);
-  useEffect(() => {
-    // Fetch inventory data from the API
-    const getLocations = async () => {
-
-      console.log(shopName);
-      console.log(accessToken);
-      await axios
-        .post("http://127.0.0.1:5000/get-locations/", {
-          shopName,
-          accessToken
-        })
-        .then(({ data: response }) => {
-          console.log(response);
-          console.log(response.locations);
-          setLocationData(response.locations);
-        })
-        .catch((error) => {
-          console.error("Error fetching inventory data:", error);
-        });
-    }
-    getLocations()
-  }, []);
 
   const setCurrentItems = async (locationId) => {
     const cachedLocationData = await getAllData(locationId);
@@ -131,9 +159,6 @@ function LocationInventory() {
       >
         {locationData.map((location) => (
           <Tab eventKey={location.id} title={location.name} key={location.id} >
-
-
-
             <Accordion>
               {Array.isArray(currentInventory) && currentInventory.length > 0 ? (
                 currentInventory.map((product) => (

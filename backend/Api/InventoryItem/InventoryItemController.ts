@@ -6,7 +6,6 @@ import { InventoryItemService } from "./InventoryItemService";
 // TODO 1. poduct counter (loading progress)
 // TODO 2. each store is db, loading products of current tab (shop)
 export const InventoryItemController = (router: any) => {
-  router.post("/product-item-list/", bodyParser(), getAllProducts);
   router.post("/inventory-item-list/", bodyParser(), getAllInventoryItems);
   //router.post("/items-quantity-pre-location/", bodyParser(), getAllInventoryItemsQuantitiesPreLocation);
   router.post("/add-new-product/", bodyParser(), addNewProduct);
@@ -15,65 +14,12 @@ export const InventoryItemController = (router: any) => {
   router.post("/change-location/", bodyParser(), moveInventoryQuantities)
   router.post("/get-locations/", bodyParser(), getAllLocations)
   router.post("/get-all-inventory-items-by-location/", bodyParser(), getAllItemsByLocation)
-  router.post("/items-count-pre-location/", bodyParser(), getItemsCountPreLocation)
+  router.post("/items-count-pre-location/", bodyParser(), inventoryItemsCountPreLocation)
+  router.post("/product-by-location/", bodyParser(), getProductsByLocation)
+  router.post("/category-list/",bodyParser(),getCategoryList)
 };
 
-//* GET - inventory item by id
-//! In graphql cannot gat at all, only specific number of items
-export async function getAllProducts(ctx: any): Promise<any> {
-  const { shopName, accessToken } = ctx.request.body;
-  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`; // Updated to the latest version
 
-  const headers = {
-    "Content-Type": "application/json",
-    "X-Shopify-Access-Token": accessToken,
-  };
-
-  try {
-    const result = await axios.post(
-      requestUrl,
-      {
-        query: `query {
-          products(first: 250, after: "eyJsYXN0X2lkIjoyMDk5NTY0MiwibGFzdF92YWx1ZSI6IjIwOTk1NjQyIn0=") {
-            edges {
-              node {
-                id
-                title
-                handle
-                variants(first: 250) {
-                  edges {
-                    node {
-                      id
-                      title
-                      inventoryItem {
-                        id
-                      }
-                    }
-                  }
-                }
-              }
-              cursor
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }`,
-      },
-      { headers }
-    );
-
-    console.log(result.data);
-    ctx.body = result.data;
-  } catch (error) {
-    console.error("Error fetching products:", error);
-    ctx.status = error.response?.status || 500;
-    ctx.body = error.response?.data || {
-      error: "An error occurred while fetching products.",
-    };
-  }
-}
 //! GET - inventory item level
 export async function getAllInventoryItems(ctx: any): Promise<any> {
   const { shopName, accessToken } = ctx.request.body; // Include quantity if needed
@@ -483,8 +429,6 @@ export async function moveInventoryQuantities(ctx: any): Promise<any> {
 
 
 //* Get all locations
-
-
 export async function getAllLocations(ctx: any): Promise<any> {
   const { shopName, accessToken } = ctx.request.body;
   const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
@@ -542,7 +486,7 @@ export async function getAllLocations(ctx: any): Promise<any> {
 }
 
 
-
+//! Deprecated
 export async function getAllItemsByLocation(ctx: any): Promise<any> {
   const { shopName, accessToken, locationId, cursor } = ctx.request.body;
   const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
@@ -635,7 +579,81 @@ export async function getAllItemsByLocation(ctx: any): Promise<any> {
 }
 
 
-export async function getItemsCountPreLocation(ctx: any): Promise<any> {
+
+export async function inventoryItemsCountPreLocation(ctx: any): Promise<any> {
+  const { shopName, accessToken, locationId } = ctx.request.body;
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": accessToken,
+  };
+
+  let count = 0;
+  let cursor = null;
+  let hasNextPage = true;
+
+  try {
+    while (hasNextPage) {
+      const query = `
+        query {
+          location(id: "gid://shopify/Location/${locationId}") {
+            id
+            name
+            inventoryLevels(first: 250, after: ${cursor ? `"${cursor}"` : null}) {
+              edges {
+                node {
+                  id
+                  location {
+                    id
+                    name
+                  }
+                  quantities(names: ["available"]) {
+                    name
+                    quantity
+                  }
+                }
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        }
+      `;
+
+      const response : any = await axios.post(requestUrl, { query }, { headers });
+
+      if (response.status !== 200 || response.data.errors) {
+        console.error("Error response:", response.data.errors || response.status);
+        ctx.status = response.status;
+        ctx.body = { error: "Failed to fetch inventory levels from Shopify." };
+        return;
+      }
+
+      const inventoryLevels = response.data.data.location.inventoryLevels;
+      const edges = inventoryLevels.edges;
+
+      // Add the count of items on this page
+      count += edges.length;
+
+      // Update pagination details
+      hasNextPage = inventoryLevels.pageInfo.hasNextPage;
+      cursor = inventoryLevels.pageInfo.endCursor;
+    }
+
+    ctx.status = 200;
+    ctx.body = { inventoryItemsCount: count };
+  } catch (error) {
+    console.error("Error fetching inventory levels:", error.message, error.response?.data);
+    ctx.status = 500;
+    ctx.body = { error: "An unexpected error occurred while fetching inventory levels." };
+  }
+}
+
+
+export async function getProductsByLocation(ctx: any): Promise<any> {
   const { shopName, accessToken, locationId } = ctx.request.body;
   const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
 
@@ -644,33 +662,56 @@ export async function getItemsCountPreLocation(ctx: any): Promise<any> {
     "X-Shopify-Access-Token": accessToken,
   };
   let cursor = null;
-  const query = `
+    const query = `
     query {
-      location(id: "${locationId}") {
-        id
-        name
-        inventoryLevels(first: 3, after: ${cursor ? `"${cursor}"` : null}) {
-          edges {
-            node {
-              id
-              location {
-                id
-                name
-              }
-              quantities(names: ["available"]) {
-                name
-                quantity
-              }
-             
-            }
+    products(first: 10, after: null, query:"location_id:${locationId}") {
+      edges {
+      cursor
+        node {
+          id
+          title
+          category{
+            id
+            name
+            fullName
           }
-          pageInfo {
-            hasNextPage
-            endCursor
+          hasOnlyDefaultVariant
+          hasOutOfStockVariants
+          productType
+          tags
+          vendor
+          variantsCount{
+            count
+          }
+          variants (first: 250, after: null){
+            edges {
+            
+              node {
+                id
+                displayName
+                inventoryQuantity
+                price
+                title
+                inventoryItem{
+                  id
+                  unitCost{
+                    amount
+                    currencyCode
+                  }
+
+                }
+              }
+              
+            }
           }
         }
       }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
+  }
   `;
 
   try {
@@ -683,9 +724,7 @@ export async function getItemsCountPreLocation(ctx: any): Promise<any> {
       return;
     }
 
-    const result: any = response.data;
-
-    const totalCount = await new InventoryItemService().countItmesInLocation(result)
+    let result: any = response.data;
 
     if (result.errors) {
       ctx.status = 400;
@@ -695,7 +734,7 @@ export async function getItemsCountPreLocation(ctx: any): Promise<any> {
 
 
     ctx.status = 200;
-    ctx.body = { totalCount, result };
+    ctx.body = result;
   } catch (error) {
     console.error("Error fetching inventory levels:", error);
     ctx.status = 500;
@@ -705,6 +744,61 @@ export async function getItemsCountPreLocation(ctx: any): Promise<any> {
 
 
 
+export async function getCategoryList(ctx: any): Promise<any> {
+  const { shopName, accessToken } = ctx.request.body;
+  const requestUrl = `https://${shopName}/admin/api/2024-10/graphql.json`;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": accessToken,
+  };
+  let cursor = null;
+ 
+  const query = `
+  query {
+    taxonomy {
+      categories(first: 250, after: null) {
+        edges {
+          node {
+            id
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+`;
+  
+  try {
+    const response = await axios.post(requestUrl, { query }, { headers });
+
+    console.log(response.data);
+    if (response.status !== 200) {
+      ctx.status = response.status;
+      ctx.body = { error: "Failed to fetch inventory levels from Shopify." };
+      return;
+    }
+
+    let result: any = response.data;
+
+    if (result.errors) {
+      ctx.status = 400;
+      ctx.body = { errors: result.errors };
+      return;
+    }
+
+
+    ctx.status = 200;
+    ctx.body = result;
+  } catch (error) {
+    console.error("Error fetching inventory levels:", error);
+    ctx.status = 500;
+    ctx.body = { error: "An unexpected error occurred while fetching inventory levels." };
+  }
+}
 
 
 
